@@ -1,12 +1,22 @@
 fastapi
 uvicorn[standard]
+
+# DB / ORM / migrations
 sqlalchemy
 psycopg[binary]
 alembic
+
+# Settings / env
 pydantic
 pydantic-settings
+python-dotenv
+
+# ML / data
 numpy
 pandas
 scikit-learn
 torch
 joblib
+
+# (рекомендовано, часто потрібно для FastAPI)
+python-multipart
