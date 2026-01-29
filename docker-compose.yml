@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: sports_ai_db
+    environment:
+      POSTGRES_DB: sports_ai
+      POSTGRES_USER: sports
+      POSTGRES_PASSWORD: sports
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
