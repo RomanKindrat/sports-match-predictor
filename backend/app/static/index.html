@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APL Match Predictor</title>
+    <style>
+      :root {
+        --bg: #0c1b16;
+        --bg-2: #12392a;
+        --card: #f4f7f1;
+        --text: #101413;
+        --muted: #53645d;
+        --accent: #ff7b2f;
+        --accent-dark: #d35f1b;
+        --good: #0f7b3e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at 20% 0%, #1f6046 0%, var(--bg) 50%, #08120f 100%);
+        min-height: 100vh;
+      }
+
+      .wrap {
+        width: min(1100px, 94vw);
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+
+      h1 {
+        color: #f4fff8;
+        margin: 0;
+        letter-spacing: 0.03em;
+        font-size: clamp(1.4rem, 2.6vw, 2.2rem);
+      }
+
+      .sub {
+        color: #ccddd5;
+        margin: 10px 0 22px;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, background 0.15s ease;
+      }
+
+      button:hover {
+        background: var(--accent-dark);
+        transform: translateY(-1px);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+      }
+
+      .teams {
+        font-size: 1.02rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.92rem;
+        margin-bottom: 10px;
+      }
+
+      .prediction {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        background: #e5efe8;
+        font-size: 0.92rem;
+      }
+
+      .winner {
+        color: var(--good);
+        font-weight: 700;
+      }
+
+      .error {
+        color: #ffddcf;
+        margin: 12px 0;
+      }
+
+      @media (max-width: 600px) {
+        .wrap {
+          padding-top: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Майбутні матчі АПЛ + прогноз</h1>
+      <p class="sub">Натисни кнопку на матчі, щоб побачити прогнозований результат.</p>
+
+      <div class="toolbar">
+        <button id="reloadBtn">Оновити матчі</button>
+      </div>
+
+      <div id="error" class="error"></div>
+      <section id="matches" class="grid"></section>
+    </main>
+
+    <script>
+      const matchesEl = document.getElementById("matches");
+      const errorEl = document.getElementById("error");
+      const reloadBtn = document.getElementById("reloadBtn");
+
+      function fmtDate(raw) {
+        if (!raw) return "Невідомий час";
+        const dt = new Date(raw);
+        if (Number.isNaN(dt.getTime())) return raw;
+        return dt.toLocaleString("uk-UA", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function probsTemplate(probs) {
+        if (!probs) return "";
+        const home = (probs.HomeWin * 100).toFixed(1);
+        const draw = (probs.Draw * 100).toFixed(1);
+        const away = (probs.AwayWin * 100).toFixed(1);
+        return `H: ${home}% | D: ${draw}% | A: ${away}%`;
+      }
+
+      async function predict(homeTeam, awayTeam, targetNode) {
+        targetNode.innerHTML = "Рахую прогноз...";
+        try {
+          const params = new URLSearchParams({
+            home_team: homeTeam,
+            away_team: awayTeam,
+          });
+          const res = await fetch(`/api/predict?${params.toString()}`);
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.detail || "Помилка прогнозу");
+          }
+
+          targetNode.innerHTML = `
+            <div class="winner">${data.predicted_result}</div>
+            <div>Впевненість: ${(data.confidence * 100).toFixed(1)}%</div>
+            <div>${probsTemplate(data.probabilities)}</div>
+          `;
+
+          if (Array.isArray(data.used_fallback_for) && data.used_fallback_for.length > 0) {
+            targetNode.innerHTML += `<div>Fallback для: ${data.used_fallback_for.join(", ")}</div>`;
+          }
+        } catch (err) {
+          targetNode.textContent = `Помилка: ${err.message}`;
+        }
+      }
+
+      function renderMatches(matches) {
+        matchesEl.innerHTML = "";
+        for (const match of matches) {
+          const card = document.createElement("article");
+          card.className = "card";
+
+          const predictionBox = document.createElement("div");
+          predictionBox.className = "prediction";
+          predictionBox.textContent = "Прогноз ще не запитувався.";
+
+          const button = document.createElement("button");
+          button.textContent = "Показати прогноз";
+          button.addEventListener("click", () =>
+            predict(match.home_team, match.away_team, predictionBox)
+          );
+
+          card.innerHTML = `
+            <div class="teams">${match.home_team} vs ${match.away_team}</div>
+            <div class="meta">${fmtDate(match.kickoff)}</div>
+            <div class="meta">Стадіон: ${match.venue || "—"}</div>
+          `;
+          card.appendChild(button);
+          card.appendChild(predictionBox);
+          matchesEl.appendChild(card);
+        }
+      }
+
+      async function loadMatches() {
+        errorEl.textContent = "";
+        matchesEl.innerHTML = "Завантажую матчі...";
+
+        try {
+          const res = await fetch("/api/matches/upcoming?league=39&limit=12");
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.detail || "Не вдалося завантажити матчі");
+          }
+
+          renderMatches(data.matches || []);
+          if (!data.matches || data.matches.length === 0) {
+            matchesEl.innerHTML = "Немає майбутніх матчів для цього сезону.";
+          }
+        } catch (err) {
+          matchesEl.innerHTML = "";
+          errorEl.textContent = `Помилка: ${err.message}`;
+        }
+      }
+
+      reloadBtn.addEventListener("click", loadMatches);
+      loadMatches();
+    </script>
+  </body>
+</html>

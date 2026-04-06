@@ -1,0 +1,129 @@
+.summary-grid {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.summary-card {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px;
+}
+
+.summary-value {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.05rem;
+}
+
+.summary-label {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.history-filters {
+  margin-top: 14px;
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: 1fr minmax(220px, 320px) 180px;
+  gap: 10px;
+  align-items: center;
+}
+
+.history-card {
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.history-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(0, 0, 0, 0.28);
+}
+
+.history-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-pill.pending {
+  background: #e7edf0;
+  color: #304954;
+}
+
+.status-pill.success {
+  background: #d6f3e3;
+  color: #14653f;
+}
+
+.status-pill.fail {
+  background: #ffe2da;
+  color: #8f3b28;
+}
+
+.prediction.compact {
+  margin-top: 8px;
+}
+
+.history-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 12, 0.56);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 30;
+}
+
+.history-modal {
+  width: min(920px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: #f6fbff;
+  color: #15252f;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.35);
+}
+
+.history-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-modal-head h2 {
+  margin: 0;
+  font-family: 'Sora', sans-serif;
+}
+
+.history-section {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #dbe5ea;
+}
+
+.history-section h3 {
+  margin: 0 0 8px;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}

@@ -1,0 +1,89 @@
+.home-filters {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 380px) 220px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.home-filters-meta {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.prediction {
+  margin-top: 10px;
+  border-radius: 10px;
+  background: #e9f2ef;
+  padding: 10px;
+}
+
+.winner {
+  color: var(--ok);
+  font-weight: 800;
+}
+
+.bars {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.bar-label {
+  font-weight: 800;
+  color: #163340;
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #d7e5df;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2b9f60, #2ab574);
+}
+
+.bar-val {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1f3a45;
+}
+
+.value-box {
+  margin-top: 10px;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.value-good {
+  background: #dff5e8;
+  color: #126b3f;
+}
+
+.value-bad {
+  background: #ffe3dc;
+  color: #9c3e27;
+}
+
+.value-muted {
+  margin-top: 8px;
+  font-size: 0.95rem;
+  color: #4f6870;
+}

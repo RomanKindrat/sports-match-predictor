@@ -1,0 +1,133 @@
+.profile-panel {
+  margin-top: 14px;
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+.profile-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.profile-panel-head h3 {
+  margin: 0;
+  font-family: 'Sora', sans-serif;
+  font-size: 1.02rem;
+}
+
+.profile-user-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.profile-label {
+  color: var(--ink-dim);
+  font-size: 0.86rem;
+}
+
+.profile-value {
+  margin-top: 4px;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-recent-list {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-recent-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.profile-recent-right {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+}
+
+.profile-recent-right .status-pill {
+  justify-self: end;
+}
+
+.profile-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-field {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-field label {
+  color: #e3f1f5;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.profile-settings-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pwd-strength {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.pwd-strength.weak {
+  color: #ffcab8;
+}
+
+.pwd-strength.medium {
+  color: #ffe2b1;
+}
+
+.pwd-strength.strong {
+  color: #9df2c4;
+}
+
+@media (max-width: 760px) {
+  .profile-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-recent-row {
+    flex-direction: column;
+  }
+
+  .profile-recent-right {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .profile-recent-right .status-pill {
+    justify-self: start;
+  }
+
+  .profile-settings-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
