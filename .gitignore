@@ -23,3 +23,8 @@ models/*.pkl
 __pycache__/
 **/__pycache__/
 *.pyc
+
+backend/.envrc
+frontend/dist/
+frontend/node_modules/
+model/.ipynb_checkpoints/
