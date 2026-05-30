@@ -56,7 +56,9 @@ export default function RegisterPage({
               {showPassword ? t('hide') : t('show')}
             </button>
           </div>
-          <div className={`strength ${passwordStrength}`}>Strength: {passwordStrength}</div>
+          <div className={`strength ${passwordStrength}`}>
+            {t('strength_label')}: {t(passwordStrength)}
+          </div>
           <ul className="req-list">
             {passChecks.map((item) => (
               <li key={item.id} className={item.ok ? 'req-ok' : 'req-pending'}>

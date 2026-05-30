@@ -1,8 +1,11 @@
+export const DISPLAY_TIMEZONE = 'Europe/Kyiv'
+
 export function formatKickoff(raw, lang = 'uk') {
-  if (!raw) return lang === 'en' ? 'Unknown time' : 'Невідомий час'
+  if (!raw) return 'Невідомий час'
   const dt = new Date(raw)
   if (Number.isNaN(dt.getTime())) return raw
-  return dt.toLocaleString(lang === 'en' ? 'en-GB' : 'uk-UA', {
+  return dt.toLocaleString('uk-UA', {
+    timeZone: DISPLAY_TIMEZONE,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

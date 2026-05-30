@@ -11,6 +11,7 @@ frontend/.env
 
 # IDE
 .vscode/
+.vite/
 
 # OS
 .DS_Store
@@ -28,3 +29,10 @@ backend/.envrc
 frontend/dist/
 frontend/node_modules/
 model/.ipynb_checkpoints/
+
+# Test / coverage artifacts
+.coverage
+.pytest_cache/
+htmlcov/
+tests/.pytest_cache/
+tests/htmlcov/

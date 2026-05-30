@@ -28,6 +28,13 @@ export async function fetchUpcomingMatches({ league = 152, limit = 10 } = {}) {
   return data
 }
 
+export async function fetchModelSettings() {
+  const res = await fetch(buildUrl('/api/model/settings'))
+  const data = await res.json()
+  if (!res.ok) throw new Error(parseApiError(data, 'Failed to load model settings'))
+  return data
+}
+
 export async function fetchPrediction({
   homeTeam,
   awayTeam,

@@ -4,19 +4,24 @@ import glob
 import json
 import os
 import pickle
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
 
-WINDOW = 20
-REQUIRED_COLUMNS = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"]
+SEED = 42
+REQUIRED_COLUMNS = ["Date", "HomeTeam", "AwayTeam", "FTR"]
 LABEL_MAP = {"H": 0, "D": 1, "A": 2}
 
-# API team names -> historical dataset names
+INITIAL_ELO = 1500.0
+ELO_K = 20.0
+ELO_HOME_ADVANTAGE = 100.0
+EDGE_FALLBACK = 0.10
+BOOK_COLS = ["BookProbH", "BookProbD", "BookProbA", "BookOverround"]
+
 TEAM_ALIASES = {
     "Manchester City": "Man City",
     "Manchester United": "Man United",
@@ -33,7 +38,6 @@ TEAM_ALIASES = {
     "Nottingham": "Nott'm Forest",
 }
 
-# Same post-match stats groups as in notebook
 POST_MATCH_COLS = {
     "goals_for": ("FTHG", "FTAG"),
     "goals_against": ("FTAG", "FTHG"),
@@ -58,89 +62,62 @@ class NotebookPrediction:
     probabilities: dict[str, float]
     confidence: float
     used_fallback_for: list[str]
+    selected_edge_threshold: float
 
 
 class NotebookMLPredictor:
     def __init__(self, datasets_dir: Path):
         self.datasets_dir = datasets_dir
-        self.model: GradientBoostingClassifier | None = None
-        self.feature_cols: list[str] = []
+
+        self.model = None
+        self.best_model_name: str = "GradientBoosting"
+        self.best_window: int = 20
+        self.best_edge: float = EDGE_FALLBACK
+
+        self.roll_feature_cols: list[str] = []
+        self.x_cols_before_corr: list[str] = []
         self.x_cols: list[str] = []
+
         self.team_latest: dict[str, np.ndarray] = {}
+        self.team_elo_latest: dict[str, float] = {}
         self.global_mean: np.ndarray | None = None
+        self.global_elo: float = INITIAL_ELO
+
         self.ready = False
         self.artifacts_dir = self.datasets_dir.parent / "artifacts"
         self.model_artifact = self.artifacts_dir / "notebook_gb.pkl"
         self.metadata_artifact = self.artifacts_dir / "notebook_gb_metadata.json"
+        self._artifacts_mtime: float | None = None
 
     def ensure_ready(self) -> None:
         if self.ready:
             return
 
-        np.random.seed(42)
-
-        df = self._load_raw()
-        x, y, long_df = self._build_training_matrix(df=df)
-
         loaded = self._try_load_artifacts()
         if not loaded:
-            # Best non-market model in notebook experiments.
-            model = GradientBoostingClassifier(
-                n_estimators=200,
-                learning_rate=0.05,
-                random_state=42,
+            raise RuntimeError(
+                "Model artifacts not found or incompatible. "
+                "Train in Jupyter and save notebook_gb.pkl + notebook_gb_metadata.json first."
             )
-            model.fit(x, y)
-            self.model = model
-            self._save_artifacts()
 
-        latest = (
-            long_df.sort_values(["Team", "Date", "MatchIdx"])
-            .groupby("Team", as_index=False)
-            .tail(1)
-        )
+        df = self._load_raw()
+        self._refresh_team_elo_latest(df)
+        self._refresh_team_latest_rollups(df)
 
-        self.team_latest = {}
-        for _, row in latest.iterrows():
-            team = normalize_team_name(str(row["Team"]))
-            vals = row[self.feature_cols].astype(float).to_numpy(dtype=np.float32)
-            self.team_latest[team] = vals
-
-        self.global_mean = long_df[self.feature_cols].mean().fillna(0.0).to_numpy(dtype=np.float32)
+        self._artifacts_mtime = self._get_artifacts_mtime()
         self.ready = True
 
-    def _try_load_artifacts(self) -> bool:
-        if not (self.model_artifact.exists() and self.metadata_artifact.exists()):
-            return False
-
-        metadata = json.loads(self.metadata_artifact.read_text(encoding="utf-8"))
-        artifact_x_cols = metadata.get("x_cols")
-        if artifact_x_cols != self.x_cols or metadata.get("model_type") != "GradientBoostingClassifier":
-            return False
-
-        with self.model_artifact.open("rb") as f:
-            model = pickle.load(f)
-        if not isinstance(model, GradientBoostingClassifier):
-            return False
-        self.model = model
-        return True
-
-    def _save_artifacts(self) -> None:
-        assert self.model is not None
-        self.artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-        with self.model_artifact.open("wb") as f:
-            pickle.dump(self.model, f)
-
-        metadata = {
-            "model_type": "GradientBoostingClassifier",
-            "x_cols": list(self.x_cols),
-            "window": WINDOW,
-        }
-        self.metadata_artifact.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def predict(self, home_team: str, away_team: str) -> NotebookPrediction:
+    def predict(
+        self,
+        home_team: str,
+        away_team: str,
+        odds_home: float | None = None,
+        odds_draw: float | None = None,
+        odds_away: float | None = None,
+    ) -> NotebookPrediction:
+        self._refresh_if_artifacts_changed()
         self.ensure_ready()
+
         assert self.model is not None
         assert self.global_mean is not None
 
@@ -158,36 +135,117 @@ class NotebookMLPredictor:
             away_vec = self.global_mean
             fallback.append(away_team)
 
-        x_raw = np.concatenate([home_vec, away_vec], axis=0).reshape(1, -1).astype(np.float32)
-        probs = self.model.predict_proba(x_raw)[0]
+        elo_home = float(self.team_elo_latest.get(home_norm, self.global_elo))
+        elo_away = float(self.team_elo_latest.get(away_norm, self.global_elo))
+        elo_diff = elo_home - elo_away
 
-        label_idx = int(np.argmax(probs))
+        feats: dict[str, float] = {}
+        for i, c in enumerate(self.roll_feature_cols):
+            feats[f"H_{c}"] = float(home_vec[i])
+            feats[f"A_{c}"] = float(away_vec[i])
+
+        feats["EloHome"] = elo_home
+        feats["EloAway"] = elo_away
+        feats["EloDiff"] = elo_diff
+
+        if all(c in self.x_cols for c in BOOK_COLS):
+            bph, bpd, bpa, over = self._book_probs_from_direct_odds(odds_home, odds_draw, odds_away)
+            feats["BookProbH"] = bph
+            feats["BookProbD"] = bpd
+            feats["BookProbA"] = bpa
+            feats["BookOverround"] = over
+
+        x_row = np.array([feats.get(c, 0.0) for c in self.x_cols], dtype=np.float32).reshape(1, -1)
+        probs = self.model.predict_proba(x_row)[0]
+
         labels = ["HomeWin", "Draw", "AwayWin"]
+        idx = int(np.argmax(probs))
         prob_map = {labels[i]: float(probs[i]) for i in range(3)}
 
         return NotebookPrediction(
-            predicted_label=labels[label_idx],
+            predicted_label=labels[idx],
             probabilities=prob_map,
-            confidence=float(probs[label_idx]),
+            confidence=float(probs[idx]),
             used_fallback_for=fallback,
+            selected_edge_threshold=float(self.best_edge),
         )
+
+    def _try_load_artifacts(self) -> bool:
+        if not (self.model_artifact.exists() and self.metadata_artifact.exists()):
+            return False
+
+        metadata = json.loads(self.metadata_artifact.read_text(encoding="utf-8"))
+        artifact_x_cols = metadata.get("x_cols")
+        artifact_roll_cols = metadata.get("roll_feature_cols")
+        artifact_model_name = metadata.get("best_model_name")
+
+        if (
+            not artifact_x_cols
+            or not artifact_roll_cols
+            or not artifact_model_name
+            or metadata.get("pipeline_variant") != "UNTITLED_NO_ABLATION"
+        ):
+            return False
+
+        with self.model_artifact.open("rb") as f:
+            model = pickle.load(f)
+        if not hasattr(model, "predict_proba"):
+            return False
+
+        self.model = model
+        self.best_model_name = str(artifact_model_name)
+        self.x_cols = list(artifact_x_cols)
+        self.roll_feature_cols = list(artifact_roll_cols)
+        self.x_cols_before_corr = list(metadata.get("x_cols_before_corr", self.x_cols))
+        self.best_window = int(metadata.get("best_window", 20))
+        self.best_edge = float(metadata.get("best_edge", EDGE_FALLBACK))
+        return True
+
+    def _refresh_if_artifacts_changed(self) -> None:
+        current = self._get_artifacts_mtime()
+        if self._artifacts_mtime is None or current is None or current <= self._artifacts_mtime:
+            return
+
+        self.ready = False
+        self.model = None
+        self.best_model_name = "GradientBoosting"
+        self.best_window = 20
+        self.best_edge = EDGE_FALLBACK
+        self.roll_feature_cols = []
+        self.x_cols_before_corr = []
+        self.x_cols = []
+        self.team_latest = {}
+        self.team_elo_latest = {}
+        self.global_mean = None
+        self.global_elo = INITIAL_ELO
+
+    def _get_artifacts_mtime(self) -> float | None:
+        if not (self.model_artifact.exists() and self.metadata_artifact.exists()):
+            return None
+        return max(self.model_artifact.stat().st_mtime, self.metadata_artifact.stat().st_mtime)
 
     def _load_raw(self) -> pd.DataFrame:
         csv_files = sorted(glob.glob(str(self.datasets_dir / "*.csv")))
         if not csv_files:
             raise RuntimeError(f"No CSV files found in {self.datasets_dir}")
 
-        dfs = []
+        dfs: list[pd.DataFrame] = []
         for path in csv_files:
-            df = pd.read_csv(path, low_memory=False)
-            missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+            try:
+                dfi = pd.read_csv(path, low_memory=False)
+            except Exception:
+                continue
+
+            missing = [c for c in REQUIRED_COLUMNS if c not in dfi.columns]
             if missing:
                 continue
-            df["SeasonFile"] = os.path.basename(path)
-            dfs.append(df)
+
+            dfi.columns = [str(c).strip() for c in dfi.columns]
+            dfi["SeasonFile"] = os.path.basename(path)
+            dfs.append(dfi)
 
         if not dfs:
-            raise RuntimeError("No valid CSV files for notebook model training")
+            raise RuntimeError("No valid CSV files for notebook model")
 
         df = pd.concat(dfs, ignore_index=True)
         df["Date"] = parse_dates(df["Date"])
@@ -200,76 +258,132 @@ class NotebookMLPredictor:
 
         df["y"] = df["FTR"].map(LABEL_MAP)
         df = df.dropna(subset=["y"]).copy()
-        df["y"] = df["y"].astype(int)
+        df["y"] = df["y"].astype(np.int64)
         return df
 
-    def _build_training_matrix(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
-        available = set(df.columns)
-        usable_keys = [k for k, (h, a) in POST_MATCH_COLS.items() if h in available and a in available]
+    def _refresh_team_latest_rollups(self, df: pd.DataFrame) -> None:
+        long_df = self._build_long_table_with_rollups(df, self.best_window, self.roll_feature_cols)
 
-        def home_points(ftr: str) -> int:
-            return 3 if ftr == "H" else 1 if ftr == "D" else 0
+        latest = long_df.sort_values(["Team", "Date", "MatchIdx"]).groupby("Team", as_index=False).tail(1)
 
-        def away_points(ftr: str) -> int:
-            return 3 if ftr == "A" else 1 if ftr == "D" else 0
+        self.team_latest = {}
+        for _, row in latest.iterrows():
+            team = normalize_team_name(str(row["Team"]))
+            vals = row[self.roll_feature_cols].astype(float).to_numpy(dtype=np.float32)
+            self.team_latest[team] = vals
 
-        df = df.copy()
-        df["HomePts"] = df["FTR"].apply(home_points)
-        df["AwayPts"] = df["FTR"].apply(away_points)
+        self.global_mean = long_df[self.roll_feature_cols].mean().fillna(0.0).to_numpy(dtype=np.float32)
+
+    def _build_long_table_with_rollups(self, df: pd.DataFrame, window: int, roll_cols: list[str]) -> pd.DataFrame:
+        dfx = df.copy().sort_values("Date").reset_index(drop=True)
+
+        dfx["HomePts"] = np.select([dfx["FTR"] == "H", dfx["FTR"] == "D"], [3, 1], default=0)
+        dfx["AwayPts"] = np.select([dfx["FTR"] == "A", dfx["FTR"] == "D"], [3, 1], default=0)
+
+        # roll col like "shots_for_roll25" -> base "shots_for"
+        bases: list[str] = []
+        for rc in roll_cols:
+            m = re.match(r"^(.*)_roll\d+$", rc)
+            if m:
+                bases.append(m.group(1))
 
         rows = []
-        for idx, r in df.iterrows():
-            rec_h = {
-                "MatchIdx": idx,
-                "Date": r["Date"],
-                "Team": normalize_team_name(str(r["HomeTeam"])),
-                "IsHome": 1,
-                "Pts": r["HomePts"],
-            }
-            rec_a = {
-                "MatchIdx": idx,
-                "Date": r["Date"],
-                "Team": normalize_team_name(str(r["AwayTeam"])),
-                "IsHome": 0,
-                "Pts": r["AwayPts"],
-            }
+        for idx, r in dfx.iterrows():
+            home = normalize_team_name(str(r["HomeTeam"]))
+            away = normalize_team_name(str(r["AwayTeam"]))
 
-            for k in usable_keys:
-                home_col, away_col = POST_MATCH_COLS[k]
-                rec_h[k] = pd.to_numeric(r.get(home_col), errors="coerce")
-                rec_a[k] = pd.to_numeric(r.get(away_col), errors="coerce")
+            rec_h = {"MatchIdx": idx, "Date": r["Date"], "Team": home, "IsHome": 1}
+            rec_a = {"MatchIdx": idx, "Date": r["Date"], "Team": away, "IsHome": 0}
 
-            rows.append(rec_h)
-            rows.append(rec_a)
+            for base in bases:
+                if base == "Pts":
+                    rec_h[base] = r["HomePts"]
+                    rec_a[base] = r["AwayPts"]
+                    continue
+
+                cols = POST_MATCH_COLS.get(base)
+                if cols is None:
+                    rec_h[base] = np.nan
+                    rec_a[base] = np.nan
+                    continue
+
+                hcol, acol = cols
+                rec_h[base] = pd.to_numeric(r.get(hcol), errors="coerce")
+                rec_a[base] = pd.to_numeric(r.get(acol), errors="coerce")
+
+            rows.extend([rec_h, rec_a])
 
         long_df = pd.DataFrame(rows).sort_values(["Team", "Date", "MatchIdx"]).reset_index(drop=True)
 
-        self.feature_cols = []
-        for col in ["Pts"] + usable_keys:
-            roll_col = f"{col}_roll{WINDOW}"
-            long_df[roll_col] = (
-                long_df.groupby("Team")[col]
-                .apply(lambda s: s.shift(1).rolling(WINDOW, min_periods=1).mean())
+        for rc in roll_cols:
+            m = re.match(r"^(.*)_roll(\d+)$", rc)
+            if not m:
+                long_df[rc] = 0.0
+                continue
+
+            base = m.group(1)
+            w = int(m.group(2))
+
+            if base not in long_df.columns:
+                long_df[rc] = 0.0
+                continue
+
+            long_df[rc] = (
+                long_df.groupby("Team")[base]
+                .apply(lambda s: s.shift(1).rolling(w, min_periods=1).mean())
                 .reset_index(level=0, drop=True)
             )
-            self.feature_cols.append(roll_col)
 
-        long_df[self.feature_cols] = long_df[self.feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        long_df[roll_cols] = long_df[roll_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        return long_df
 
-        home_feats = long_df[long_df["IsHome"] == 1][["MatchIdx"] + self.feature_cols].copy().add_prefix("H_")
-        away_feats = long_df[long_df["IsHome"] == 0][["MatchIdx"] + self.feature_cols].copy().add_prefix("A_")
+    def _refresh_team_elo_latest(self, df: pd.DataFrame) -> None:
+        elo: dict[str, float] = {}
+        for _, row in df.iterrows():
+            home = normalize_team_name(str(row["HomeTeam"]))
+            away = normalize_team_name(str(row["AwayTeam"]))
 
-        match_feats = df.copy()
-        match_feats = match_feats.merge(home_feats, left_index=True, right_on="H_MatchIdx", how="left")
-        match_feats = match_feats.merge(away_feats, left_index=True, right_on="A_MatchIdx", how="left")
-        match_feats = match_feats.drop(columns=["H_MatchIdx", "A_MatchIdx"], errors="ignore")
+            h_rating = float(elo.get(home, INITIAL_ELO))
+            a_rating = float(elo.get(away, INITIAL_ELO))
 
-        self.x_cols = [c for c in match_feats.columns if c.startswith("H_") or c.startswith("A_")]
-        match_feats[self.x_cols] = match_feats[self.x_cols].fillna(0.0)
+            expected_home = 1.0 / (1.0 + 10.0 ** ((a_rating - (h_rating + ELO_HOME_ADVANTAGE)) / 400.0))
+            if row["FTR"] == "H":
+                score_home = 1.0
+            elif row["FTR"] == "D":
+                score_home = 0.5
+            else:
+                score_home = 0.0
 
-        x = match_feats[self.x_cols].values.astype(np.float32)
-        y = match_feats["y"].values.astype(np.int64)
-        return x, y, long_df
+            elo[home] = h_rating + ELO_K * (score_home - expected_home)
+            elo[away] = a_rating + ELO_K * ((1.0 - score_home) - (1.0 - expected_home))
+
+        self.team_elo_latest = elo
+        self.global_elo = float(np.mean(list(elo.values()))) if elo else INITIAL_ELO
+
+    def _book_probs_from_direct_odds(
+        self,
+        odds_home: float | None,
+        odds_draw: float | None,
+        odds_away: float | None,
+    ) -> tuple[float, float, float, float]:
+        if (
+            odds_home is None
+            or odds_draw is None
+            or odds_away is None
+            or odds_home <= 1.0
+            or odds_draw <= 1.0
+            or odds_away <= 1.0
+        ):
+            return 0.0, 0.0, 0.0, 0.0
+
+        inv_h = 1.0 / float(odds_home)
+        inv_d = 1.0 / float(odds_draw)
+        inv_a = 1.0 / float(odds_away)
+        inv_sum = inv_h + inv_d + inv_a
+        if inv_sum <= 0:
+            return 0.0, 0.0, 0.0, 0.0
+
+        return float(inv_h / inv_sum), float(inv_d / inv_sum), float(inv_a / inv_sum), float(inv_sum - 1.0)
 
 
 def normalize_team_name(team: str) -> str:

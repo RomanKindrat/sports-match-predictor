@@ -1,0 +1,26 @@
+fastapi
+uvicorn[standard]
+requests
+
+# DB / ORM / migrations
+sqlalchemy
+psycopg[binary]
+alembic
+
+# Settings / env
+pydantic
+pydantic-settings
+python-dotenv
+
+# ML / data runtime
+numpy
+pandas
+scikit-learn
+joblib
+
+# FastAPI form-data support
+python-multipart
+
+# Tests
+pytest
+pytest-cov

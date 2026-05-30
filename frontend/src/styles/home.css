@@ -2,7 +2,7 @@
   margin-top: 14px;
   margin-bottom: 8px;
   display: grid;
-  grid-template-columns: 1fr minmax(240px, 380px) 220px auto;
+  grid-template-columns: 1fr minmax(240px, 380px) 220px auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -11,6 +11,42 @@
   color: var(--ink-dim);
   font-size: 0.9rem;
   text-align: right;
+}
+
+.home-grid {
+  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+
+.bet-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.95rem;
+  justify-self: start;
+  background: #203746;
+  border: 1px solid #456377;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.bet-filter-toggle input {
+  accent-color: var(--accent);
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card button.prediction-toggle {
+  margin-top: 6px;
+  border: 1px solid #c2d2cd;
+  background: #f3f8f6;
+  color: #1f3a45;
 }
 
 .prediction {
@@ -25,15 +61,42 @@
   font-weight: 800;
 }
 
+.decision-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.decision-bet {
+  background: #dbf6e7;
+  color: #0f7a44;
+}
+
+.decision-big {
+  background: #c9f2da;
+  color: #0b6b3a;
+  border: 1px solid #79c69c;
+}
+
+.decision-skip {
+  background: #fde2dc;
+  color: #9c3e27;
+}
+
 .bars {
   margin-top: 8px;
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
 .bar-row {
   display: grid;
-  grid-template-columns: 20px 1fr auto;
+  grid-template-columns: minmax(64px, 120px) 1fr 64px;
   gap: 8px;
   align-items: center;
 }
@@ -41,10 +104,13 @@
 .bar-label {
   font-weight: 800;
   color: #163340;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bar-track {
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
   background: #d7e5df;
   overflow: hidden;
@@ -57,9 +123,10 @@
 }
 
 .bar-val {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #1f3a45;
+  text-align: right;
 }
 
 .value-box {

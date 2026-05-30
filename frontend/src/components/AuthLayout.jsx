@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function AuthLayout({ title, subtitle, eyebrow = 'Sports Predictor Account', children }) {
+export default function AuthLayout({ title, subtitle, eyebrow = 'Акаунт прогнозів спорту', children }) {
   return (
     <main className="auth-page view">
       <div className="auth-bg-shape shape-a" />

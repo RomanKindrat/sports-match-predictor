@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+requests
 
 # DB / ORM / migrations
 sqlalchemy
@@ -20,3 +21,8 @@ joblib
 
 # (рекомендовано, часто потрібно для FastAPI)
 python-multipart
+
+# Tests
+pytest
+pytest-cov
+pytest-cov

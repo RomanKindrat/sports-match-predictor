@@ -149,6 +149,7 @@ body {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+  align-items: start;
 }
 
 .filter-group {

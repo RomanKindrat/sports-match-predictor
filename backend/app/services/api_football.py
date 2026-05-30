@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 
 import requests
@@ -15,6 +16,13 @@ ALLSPORTS_BASE_URLS = (
     "https://allsportsapi.com/api/football/",
 )
 DEFAULT_APL_LEAGUE_ID = "152"
+ALLSPORTS_EPL_ALIASES = {"39", "152", "epl", "apl", "premier-league"}
+ALLSPORTS_TARGET_COUNTRY = "england"
+ALLSPORTS_TARGET_LEAGUE = "premier league"
+
+
+class AllSportsLeagueUnavailable(RuntimeError):
+    pass
 
 
 def _headers() -> dict:
@@ -59,6 +67,49 @@ def _allsports_request(params: dict[str, Any]) -> dict[str, Any]:
             continue
 
     raise RuntimeError(f"AllSports request failed: {last_error}")
+
+
+@lru_cache(maxsize=1)
+def _allsports_supported_leagues() -> tuple[dict[str, Any], ...]:
+    payload = _allsports_request({"met": "Leagues", "APIkey": _allsports_key()})
+    if str(payload.get("success")) not in {"1", "true", "True"}:
+        raise RuntimeError(f"AllSports leagues error: {payload.get('result') or payload.get('message') or payload}")
+    return tuple(payload.get("result") or [])
+
+
+def _league_label(league: dict[str, Any]) -> str:
+    country = str(league.get("country_name") or "").strip()
+    name = str(league.get("league_name") or "").strip()
+    key = str(league.get("league_key") or "").strip()
+    if country and name and key:
+        return f"{country} - {name} ({key})"
+    return name or key or "unknown"
+
+
+def _resolve_allsports_league_id(league: int | str) -> str:
+    override = os.getenv("ALLSPORTS_LEAGUE_ID")
+    if override:
+        return str(override).strip()
+
+    raw = str(league).strip()
+    if raw.lower() not in ALLSPORTS_EPL_ALIASES:
+        return raw
+
+    leagues = _allsports_supported_leagues()
+    for item in leagues:
+        country = str(item.get("country_name") or "").strip().lower()
+        name = str(item.get("league_name") or "").strip().lower()
+        if country == ALLSPORTS_TARGET_COUNTRY and name == ALLSPORTS_TARGET_LEAGUE:
+            league_key = item.get("league_key")
+            if league_key:
+                return str(league_key)
+
+    supported = ", ".join(_league_label(item) for item in leagues[:8]) or "none"
+    raise AllSportsLeagueUnavailable(
+        "English Premier League is not available for this AllSportsAPI key. "
+        f"Supported leagues in this account: {supported}. "
+        "Enable England Premier League in AllSportsAPI or set ALLSPORTS_LEAGUE_ID to an available league_key."
+    )
 
 
 def _normalize_league_id(league: int | str) -> str:
@@ -199,7 +250,7 @@ def _extract_score(item: dict[str, Any]) -> tuple[int | None, int | None]:
 def get_fixtures_range(league: int = 39, from_date: date | None = None, to_date: date | None = None) -> list[dict]:
     from_value = from_date or (datetime.utcnow().date() - timedelta(days=2))
     to_value = to_date or (datetime.utcnow().date() + timedelta(days=2))
-    league_id = _normalize_league_id(league)
+    league_id = _resolve_allsports_league_id(league)
     payload = _allsports_request(
         {
             "met": "Fixtures",
@@ -256,7 +307,7 @@ def get_upcoming_matches(league: int = 39, season: int | None = None, next_match
     today = datetime.utcnow().date()
     from_date = today
     in_365_days = from_date + timedelta(days=365)
-    league_id = _normalize_league_id(league)
+    league_id = _resolve_allsports_league_id(league)
     payload = _allsports_request(
         {
             "met": "Fixtures",

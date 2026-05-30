@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react'
+import { VALUE_EDGE_THRESHOLD } from '../constants'
 import MetricCard from '../components/analytics/MetricCard'
 import AnalyticsFilters from '../components/analytics/Filters'
 import ChartsSection from '../components/analytics/ChartsSection'
 import { resultStatus } from '../utils/history'
+import { DISPLAY_TIMEZONE } from '../utils/format'
+import { isValueBet } from '../utils/valueBet'
 
 function pct(value) {
   return `${(value * 100).toFixed(1)}%`
@@ -10,7 +13,15 @@ function pct(value) {
 
 function dayLabel(date, lang) {
   const d = new Date(date)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(lang === 'en' ? 'en-GB' : 'uk-UA', { day: '2-digit', month: '2-digit' })
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: DISPLAY_TIMEZONE,
+      })
 }
 
 function bookmakerPick(item) {
@@ -45,7 +56,7 @@ export default function AnalyticsPage({ user, historyItems, loadingHistory, onBa
       if (statusFilter === 'correct' && rs.state !== 'success') return false
       if (statusFilter === 'incorrect' && rs.state !== 'fail') return false
       if (statusFilter === 'pending' && rs.state !== 'pending') return false
-      if (valueOnly && !(Number(item.value_edge) > 0)) return false
+      if (valueOnly && !isValueBet(item.value_edge)) return false
       return true
     })
   }, [historyItems, dateRange, teamQuery, statusFilter, valueOnly, lang])
@@ -84,34 +95,44 @@ export default function AnalyticsPage({ user, historyItems, loadingHistory, onBa
     })
     const marketAccuracy = marketTotal ? marketCorrect / marketTotal : 0
 
-    const valueRows = rows.filter((r) => Number(r.value_edge) > 0)
+    const valueRows = rows.filter((r) => isValueBet(r.value_edge))
     const valueFinished = valueRows.filter((r) => r._rs.state !== 'pending')
     const valueWins = valueFinished.filter((r) => r._rs.state === 'success').length
     const valueWinrate = valueFinished.length ? valueWins / valueFinished.length : 0
 
-    const byDay = new Map()
-    rows.forEach((r) => {
-      const key = dayLabel(r.saved_at, lang)
-      if (!byDay.has(key)) byDay.set(key, [])
-      byDay.get(key).push(r)
+    const sortedRows = [...rows].sort((a, b) => {
+      const aTs = Date.parse(a.saved_at || '')
+      const bTs = Date.parse(b.saved_at || '')
+      if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return aTs - bTs
+      return Number(a.id || 0) - Number(b.id || 0)
     })
-    const sortedDays = [...byDay.entries()]
-    const accuracyTrend = sortedDays.map(([label, group]) => {
-      const fin = group.filter((g) => g._rs.state !== 'pending')
-      const c = fin.filter((g) => g._rs.state === 'success').length
-      return { label, value: fin.length ? c / fin.length : 0 }
+    const sortedFinishedRows = sortedRows.filter((r) => r._rs.state !== 'pending')
+
+    let finishedSeen = 0
+    let correctSeen = 0
+    const accuracyTrend = sortedFinishedRows.map((r) => {
+      finishedSeen += 1
+      if (r._rs.state === 'success') correctSeen += 1
+      return {
+        label: dayLabel(r.saved_at, lang),
+        value: finishedSeen ? correctSeen / finishedSeen : 0,
+      }
     })
-    const roiTrend = sortedDays.map(([label, group]) => {
-      const rois = group
-        .map((r) => {
-          if (r._rs.state === 'pending') return null
-          const odd =
-            r.predicted_outcome === 'H' ? Number(r.odds_home) : r.predicted_outcome === 'D' ? Number(r.odds_draw) : Number(r.odds_away)
-          if (!Number.isFinite(odd) || odd <= 1) return null
-          return r._rs.state === 'success' ? odd - 1 : -1
-        })
-        .filter((v) => v !== null)
-      return { label, value: rois.length ? rois.reduce((s, v) => s + v, 0) / rois.length : 0 }
+
+    let roiCount = 0
+    let roiSum = 0
+    const roiTrend = sortedFinishedRows.map((r) => {
+      const odd =
+        r.predicted_outcome === 'H' ? Number(r.odds_home) : r.predicted_outcome === 'D' ? Number(r.odds_draw) : Number(r.odds_away)
+      if (Number.isFinite(odd) && odd > 1) {
+        const oneRoi = r._rs.state === 'success' ? odd - 1 : -1
+        roiSum += oneRoi
+        roiCount += 1
+      }
+      return {
+        label: dayLabel(r.saved_at, lang),
+        value: roiCount ? roiSum / roiCount : 0,
+      }
     })
 
     const distPred = [
@@ -156,17 +177,17 @@ export default function AnalyticsPage({ user, historyItems, loadingHistory, onBa
   }, [filtered, lang, t])
 
   const cards = [
-    { title: t('accuracy'), value: pct(analytics.accuracy), hint: 'correct / finished', tone: analytics.accuracy >= 0.5 ? 'good' : 'bad' },
+    { title: t('accuracy'), value: pct(analytics.accuracy), hint: 'вгадані / завершені', tone: analytics.accuracy >= 0.5 ? 'good' : 'bad' },
     { title: t('total_predictions'), value: analytics.total, hint: t('all_records'), tone: 'neutral' },
     { title: t('correct_predictions_title'), value: analytics.correct, hint: t('successful_hint'), tone: 'good' },
     { title: t('incorrect_predictions_title'), value: analytics.incorrect, hint: t('failed_hint'), tone: 'bad' },
     { title: t('pending_predictions_title'), value: analytics.pending, hint: t('pending_hint'), tone: 'neutral' },
     { title: t('average_confidence_title'), value: pct(analytics.avgConfidence), hint: t('average_confidence_hint'), tone: 'neutral' },
-    { title: 'ROI', value: analytics.roi == null ? '—' : pct(analytics.roi), hint: t('roi_settled_hint'), tone: (analytics.roi ?? 0) >= 0 ? 'good' : 'bad' },
+    { title: 'Рентабельність', value: analytics.roi == null ? '—' : pct(analytics.roi), hint: t('roi_settled_hint'), tone: (analytics.roi ?? 0) >= 0 ? 'good' : 'bad' },
     { title: t('average_value_edge_title'), value: `${analytics.avgValueEdge >= 0 ? '+' : ''}${pct(analytics.avgValueEdge)}`, hint: t('model_market_hint'), tone: analytics.avgValueEdge >= 0 ? 'good' : 'bad' },
     { title: t('bookmaker_accuracy_title'), value: pct(analytics.marketAccuracy), hint: t('market_hint'), tone: 'neutral' },
     { title: t('model_vs_book_title'), value: `${analytics.marketDiff >= 0 ? '+' : ''}${pct(analytics.marketDiff)}`, hint: t('model_book_diff_hint'), tone: analytics.marketDiff >= 0 ? 'good' : 'bad' },
-    { title: t('value_bets_title'), value: analytics.valueCount, hint: t('edge_gt_zero'), tone: 'neutral' },
+    { title: t('value_bets_title'), value: analytics.valueCount, hint: null, tone: 'neutral' },
     { title: t('value_winrate'), value: pct(analytics.valueWinrate), hint: `${analytics.valueWins}/${Math.max(1, analytics.valueCount)}`, tone: analytics.valueWinrate >= 0.5 ? 'good' : 'bad' },
   ]
 
@@ -174,7 +195,7 @@ export default function AnalyticsPage({ user, historyItems, loadingHistory, onBa
     <main className="page view">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Model Intelligence</p>
+          <p className="eyebrow">{t('model_intelligence')}</p>
           <h1>{t('analytics_title')}</h1>
           <p className="hero-text">{t('analytics_subtitle', { name: user?.name || user?.email })}</p>
         </div>

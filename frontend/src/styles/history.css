@@ -53,11 +53,12 @@
   align-items: center;
   justify-content: center;
   width: fit-content;
+  white-space: nowrap;
   border-radius: 999px;
   padding: 4px 9px;
   font-size: 0.74rem;
   font-weight: 700;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .status-pill.pending {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -155,7 +155,7 @@ def create_prediction(
         )
         if existing:
             existing.model_id = model.id
-            existing.created_at = datetime.utcnow()
+            existing.created_at = datetime.now(timezone.utc)
             existing.p_home = p_home
             existing.p_draw = p_draw
             existing.p_away = p_away

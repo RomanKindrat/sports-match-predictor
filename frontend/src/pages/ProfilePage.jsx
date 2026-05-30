@@ -75,7 +75,7 @@ export default function ProfilePage({
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPwdError(String(err?.message || 'Failed to update password'))
+      setPwdError(String(err?.message || t('generic_error_update_password')))
     }
   }
 
@@ -122,7 +122,9 @@ export default function ProfilePage({
           <div className="profile-field">
             <label htmlFor="new-pass">{t('new_password')}</label>
             <input id="new-pass" type="password" className="search-input" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-            <div className={`pwd-strength ${strength}`}>Strength: {strength}</div>
+            <div className={`pwd-strength ${strength}`}>
+              {t('strength_label')}: {t(strength)}
+            </div>
             <ul className="req-list">
               {checks.map((check) => (
                 <li key={check.id} className={check.ok ? 'req-ok' : 'req-pending'}>

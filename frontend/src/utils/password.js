@@ -23,11 +23,11 @@ export function isStrongEnough(password) {
 
 export function passwordChecks(password, lang = 'uk') {
   const ru = {
-    len: lang === 'en' ? 'Minimum 8 characters' : 'Мінімум 8 символів',
-    upper: lang === 'en' ? 'At least one uppercase letter (A-Z)' : 'Є велика літера (A-Z)',
-    lower: lang === 'en' ? 'At least one lowercase letter (a-z)' : 'Є мала літера (a-z)',
-    digit: lang === 'en' ? 'At least one digit (0-9)' : 'Є цифра (0-9)',
-    special: lang === 'en' ? 'At least one special symbol (!@#$...)' : 'Є спецсимвол (!@#$...)',
+    len: 'Мінімум 8 символів',
+    upper: 'Є велика літера (A-Z)',
+    lower: 'Є мала літера (a-z)',
+    digit: 'Є цифра (0-9)',
+    special: 'Є спецсимвол (!@#$...)',
   }
   return [
     { id: 'len', label: ru.len, ok: password.length >= 8 },

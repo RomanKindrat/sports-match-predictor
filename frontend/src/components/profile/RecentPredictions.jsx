@@ -21,14 +21,12 @@ export default function RecentPredictions({ items, onGoHistory, t, lang }) {
             return (
               <div key={item.id} className="profile-recent-row">
                 <div>
-                  <div className="teams">
-                    {item.home_team} vs {item.away_team}
-                  </div>
+                  <div className="teams">{item.home_team} — {item.away_team}</div>
                   <div className="meta">{t('match')}: {formatKickoff(item.kickoff, lang)}</div>
                   <div className="meta">{t('prediction')}: {predictedResultLabel(item, lang)}</div>
                 </div>
                 <div className="profile-recent-right">
-                  <span className={`status-pill ${rs.state}`}>{rs.state === 'pending' ? 'pending' : rs.state}</span>
+                  <span className={`status-pill ${rs.state}`}>{rs.label}</span>
                   <div className="meta">{rs.state === 'pending' ? t('expected') : `${t('score')}: ${scoreLabel(item)}`}</div>
                 </div>
               </div>

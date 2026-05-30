@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
+import { DISPLAY_TIMEZONE } from '../../utils/format'
 
 function formatJoinedAt(value, lang) {
   const ts = Date.parse(value || '')
   if (!Number.isFinite(ts)) return '—'
-  return new Date(ts).toLocaleString(lang === 'en' ? 'en-GB' : 'uk-UA')
+  return new Date(ts).toLocaleString('uk-UA', { timeZone: DISPLAY_TIMEZONE })
 }
 
 export default function UserCard({ user, onSaveName, saving, t, lang }) {
@@ -20,7 +21,7 @@ export default function UserCard({ user, onSaveName, saving, t, lang }) {
       await onSaveName(nameDraft.trim())
       setEditing(false)
     } catch (err) {
-      setError(String(err?.message || 'Failed to update name'))
+      setError(String(err?.message || t('generic_error_update_name')))
     }
   }
 

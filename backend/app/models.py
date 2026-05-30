@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, UniqueConstraint, Boolean, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -62,7 +62,11 @@ class Prediction(Base):
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), nullable=False)
     model_id: Mapped[int] = mapped_column(ForeignKey("models.id"), nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     p_home: Mapped[float] = mapped_column(Float, nullable=False)
     p_draw: Mapped[float] = mapped_column(Float, nullable=False)
@@ -73,7 +77,7 @@ class Prediction(Base):
     bookmaker_p_draw: Mapped[float | None] = mapped_column(Float)
     bookmaker_p_away: Mapped[float | None] = mapped_column(Float)
     is_correct: Mapped[bool | None] = mapped_column(Boolean)
-    settled_at: Mapped[datetime | None] = mapped_column(DateTime)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     roi: Mapped[float | None] = mapped_column(Float)
 
     match: Mapped["Match"] = relationship()

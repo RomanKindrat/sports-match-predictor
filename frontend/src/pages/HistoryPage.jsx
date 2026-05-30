@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { formatKickoff, probabilitiesLine, toPercent } from '../utils/format'
-import { explainability, predictedResultLabel, resultStatus, scoreLabel } from '../utils/history'
+import { DISPLAY_TIMEZONE, formatKickoff, probabilitiesLine, toPercent } from '../utils/format'
+import { predictedResultLabel, resultStatus, scoreLabel } from '../utils/history'
+import { isValueBet } from '../utils/valueBet'
 
 function metric(value, label) {
   return { value, label }
@@ -21,7 +22,6 @@ function DetailsModal({ item, onClose, t, lang }) {
 
   const rs = resultStatus(item, lang)
   const p = item.probabilities || {}
-  const modelExplain = explainability(item, lang)
   const hasBook = item.odds_home && item.odds_draw && item.odds_away
   const implied = item.bookmaker_probs || null
 
@@ -29,9 +29,7 @@ function DetailsModal({ item, onClose, t, lang }) {
     <div className="history-modal-backdrop" onClick={onClose}>
       <div className="history-modal" onClick={(e) => e.stopPropagation()}>
         <div className="history-modal-head">
-          <h2>
-            {item.home_team} vs {item.away_team}
-          </h2>
+          <h2>{item.home_team} — {item.away_team}</h2>
           <button className="ghost" onClick={onClose}>
             {t('cancel')}
           </button>
@@ -42,9 +40,11 @@ function DetailsModal({ item, onClose, t, lang }) {
           <div className="detail-grid">
             <div>{t('match')}: {formatKickoff(item.kickoff, lang)}</div>
             <div>{t('stadium')}: {item.venue || '—'}</div>
-            <div>{t('saved')}: {new Date(item.saved_at).toLocaleString(lang === 'en' ? 'en-GB' : 'uk-UA')}</div>
             <div>
-              Status: <StatusPill state={rs.state} label={rs.state === 'pending' ? t('pending') : t('successful')} />
+              {t('saved')}: {new Date(item.saved_at).toLocaleString('uk-UA', { timeZone: DISPLAY_TIMEZONE })}
+            </div>
+            <div>
+              {t('status')}: <StatusPill state={rs.state} label={rs.label} />
             </div>
           </div>
         </section>
@@ -52,23 +52,23 @@ function DetailsModal({ item, onClose, t, lang }) {
         <section className="history-section">
           <h3>{t('prediction')}</h3>
           <div className="detail-grid">
-            <div>Result: {predictedResultLabel(item, lang)}</div>
+            <div>{t('result_label')}: {predictedResultLabel(item, lang)}</div>
             <div>{t('confidence')}: {(item.confidence * 100).toFixed(1)}%</div>
-            <div>Home win probability: {toPercent(p.HomeWin || 0)}</div>
-            <div>Draw probability: {toPercent(p.Draw || 0)}</div>
-            <div>Away win probability: {toPercent(p.AwayWin || 0)}</div>
+            <div>{t('home_win_probability')}: {toPercent(p.HomeWin || 0)}</div>
+            <div>{t('draw_probability')}: {toPercent(p.Draw || 0)}</div>
+            <div>{t('away_win_probability')}: {toPercent(p.AwayWin || 0)}</div>
           </div>
         </section>
 
         <section className="history-section">
-          <h3>{t('match')} fact</h3>
+          <h3>{t('match_facts')}</h3>
           {rs.state === 'pending' ? (
             <div className="meta">{t('expected')}</div>
           ) : (
             <div className="detail-grid">
               <div>{t('score')}: {scoreLabel(item)}</div>
               <div>
-                Result: <StatusPill state={rs.state} label={rs.state === 'success' ? 'success' : 'fail'} />
+                {t('result_label')}: <StatusPill state={rs.state} label={rs.state === 'success' ? t('success') : t('fail')} />
               </div>
             </div>
           )}
@@ -77,38 +77,23 @@ function DetailsModal({ item, onClose, t, lang }) {
         <section className="history-section">
           <h3>{t('bookmaker')} / {t('value')}</h3>
           {!hasBook ? (
-            <div className="meta">Odds unavailable.</div>
+            <div className="meta">{t('odds_unavailable')}</div>
           ) : (
             <div className="detail-grid">
               <div>
-                Odds: H {item.odds_home} / D {item.odds_draw} / A {item.odds_away}
+                {t('odds_line')}: H {item.odds_home} / D {item.odds_draw} / A {item.odds_away}
               </div>
               <div>
-                Implied: H {toPercent(implied?.HomeWin || 0)} / D {toPercent(implied?.Draw || 0)} / A {toPercent(implied?.AwayWin || 0)}
+                {t('implied_line')}: H {toPercent(implied?.HomeWin || 0)} / D {toPercent(implied?.Draw || 0)} / A {toPercent(implied?.AwayWin || 0)}
               </div>
               <div className={item.value_edge >= 0 ? 'value-box value-good' : 'value-box value-bad'}>
-                {item.value_edge >= 0 ? 'Value bet' : 'No value'}: {item.value_edge >= 0 ? '+' : ''}
+                {isValueBet(item.value_edge) ? t('value_bet') : t('no_value')}: {item.value_edge >= 0 ? '+' : ''}
                 {((item.value_edge || 0) * 100).toFixed(1)}%
               </div>
             </div>
           )}
         </section>
 
-        <section className="history-section">
-          <h3>Explainability</h3>
-          {modelExplain.length === 0 ? (
-            <div className="meta">Additional explainability info is not available for this item yet.</div>
-          ) : (
-            <ul className="req-list">
-              {modelExplain.map((line, idx) => (
-                <li key={idx} className="req-ok">
-                  • {line}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="meta">Elo/form/rolling stats and last 5 matches will appear automatically once these fields are available.</div>
-        </section>
       </div>
     </div>
   )
@@ -160,7 +145,7 @@ export default function HistoryPage({ user, historyItems, onBackHome, onLogout, 
     const finished = success + fail
     const avgConfidence = total ? (enriched.reduce((s, i) => s + (i.confidence || 0), 0) / total) * 100 : 0
     const accuracy = finished ? (success / finished) * 100 : 0
-    const roi = total ? (enriched.reduce((s, i) => s + (i.value_edge || 0), 0) / total) * 100 : 0
+
     return [
       metric(total, t('total_predictions')),
       metric(`${accuracy.toFixed(1)}%`, t('accuracy')),
@@ -168,7 +153,6 @@ export default function HistoryPage({ user, historyItems, onBackHome, onLogout, 
       metric(fail, t('failed')),
       metric(pending, t('pending')),
       metric(`${avgConfidence.toFixed(1)}%`, t('avg_confidence')),
-      metric(`${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`, t('roi_proxy')),
     ]
   }, [enriched, t])
 
@@ -176,7 +160,7 @@ export default function HistoryPage({ user, historyItems, onBackHome, onLogout, 
     <main className="page view">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Prediction Journal</p>
+          <p className="eyebrow">{t('history')}</p>
           <h1>{t('history_title')}</h1>
           <p className="hero-text">{t('history_subtitle', { name: user?.name || user?.email })}</p>
         </div>
@@ -229,12 +213,14 @@ export default function HistoryPage({ user, historyItems, onBackHome, onLogout, 
           <article className="card history-card" key={item.id} onClick={() => setSelected(item)} role="button" tabIndex={0}>
             <div className="history-card-top">
               <div className="teams">
-                {item.home_team} vs {item.away_team}
+                {item.home_team} — {item.away_team}
               </div>
               <StatusPill state={item._rs.state} label={item._rs.label} />
             </div>
             <div className="meta">{t('match')}: {formatKickoff(item.kickoff, lang)}</div>
-            <div className="meta">{t('saved')}: {new Date(item.saved_at).toLocaleString(lang === 'en' ? 'en-GB' : 'uk-UA')}</div>
+            <div className="meta">
+              {t('saved')}: {new Date(item.saved_at).toLocaleString('uk-UA', { timeZone: DISPLAY_TIMEZONE })}
+            </div>
             <div className="prediction compact">
               <div className="winner">{predictedResultLabel(item, lang)}</div>
               <div>{t('confidence')}: {(item.confidence * 100).toFixed(1)}%</div>
@@ -243,7 +229,7 @@ export default function HistoryPage({ user, historyItems, onBackHome, onLogout, 
                 {item._rs.state === 'pending' ? t('expected') : `${t('score')}: ${scoreLabel(item)}`}
               </div>
               {item.value_edge !== null && item.value_edge !== undefined && (
-                <div className={item.value_edge >= 0 ? 'value-box value-good' : 'value-box value-bad'}>
+                <div className={isValueBet(item.value_edge) ? 'value-box value-good' : 'value-box value-bad'}>
                   {t('value')}: {item.value_edge >= 0 ? '+' : ''}
                   {(item.value_edge * 100).toFixed(1)}%
                 </div>

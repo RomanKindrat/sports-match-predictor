@@ -14,6 +14,7 @@ class PredictionResult:
     probabilities: dict[str, float]
     confidence: float
     used_fallback_for: list[str]
+    selected_edge_threshold: float
 
 
 def _load_notebook_module():
@@ -35,9 +36,21 @@ def get_predictor():
     return get_notebook_predictor(datasets_dir)
 
 
-def predict_match_from_notebook_model(home_team: str, away_team: str) -> PredictionResult:
+def predict_match_from_notebook_model(
+    home_team: str,
+    away_team: str,
+    odds_home: float | None = None,
+    odds_draw: float | None = None,
+    odds_away: float | None = None,
+) -> PredictionResult:
     predictor = get_predictor()
-    raw = predictor.predict(home_team=home_team, away_team=away_team)
+    raw = predictor.predict(
+        home_team=home_team,
+        away_team=away_team,
+        odds_home=odds_home,
+        odds_draw=odds_draw,
+        odds_away=odds_away,
+    )
 
     pretty_label = {
         "HomeWin": f"Перемога {home_team}",
@@ -52,4 +65,5 @@ def predict_match_from_notebook_model(home_team: str, away_team: str) -> Predict
         probabilities=raw.probabilities,
         confidence=raw.confidence,
         used_fallback_for=raw.used_fallback_for,
+        selected_edge_threshold=raw.selected_edge_threshold,
     )

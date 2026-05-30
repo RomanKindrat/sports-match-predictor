@@ -232,13 +232,8 @@ function MiniLineChart({ title, points, color = '#34a46b', percent = false, t })
         {visibleCoords.map((c) => (
           <g key={`${c.idx}-${c.x}-${c.y}`}>
             <circle cx={c.x} cy={c.y} r="3.5" fill={color}>
-              <title>
-                {c.label}: {fmtValue(c.value, percent)}
-              </title>
+              <title>{`${c.label}: ${fmtValue(c.value, percent)}`}</title>
             </circle>
-            <text x={c.x} y={c.y - 10} textAnchor="middle" className="chart-point-label">
-              {fmtValue(c.value, percent)}
-            </text>
           </g>
         ))}
         {xTickIdx.map((idx) => {

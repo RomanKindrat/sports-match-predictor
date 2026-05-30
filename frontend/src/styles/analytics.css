@@ -40,6 +40,11 @@
   gap: 12px;
 }
 
+.analytics-charts-grid .chart-card:nth-child(3),
+.analytics-charts-grid .chart-card:nth-child(4) {
+  grid-column: 1 / -1;
+}
+
 .chart-card {
   border-radius: 14px;
   padding: 12px;
@@ -100,12 +105,12 @@
 
 .dist-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .dist-row {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .dist-head {
@@ -116,7 +121,7 @@
 }
 
 .dist-track {
-  height: 10px;
+  height: 14px;
   border-radius: 999px;
   background: rgba(220, 237, 242, 0.22);
   overflow: hidden;
@@ -135,5 +140,10 @@
 
   .analytics-charts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-charts-grid .chart-card:nth-child(3),
+  .analytics-charts-grid .chart-card:nth-child(4) {
+    grid-column: auto;
   }
 }

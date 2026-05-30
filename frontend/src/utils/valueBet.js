@@ -1,3 +1,5 @@
+import { VALUE_EDGE_THRESHOLD } from '../constants.js'
+
 export function bookmakerImpliedFromOdds(match) {
   const h = Number(match?.odds_home)
   const d = Number(match?.odds_draw)
@@ -27,4 +29,8 @@ export function valueBetStats(match, prediction) {
   const bookProb = book[pick]
   const edge = modelProb - bookProb
   return { pick, modelProb, bookProb, edge }
+}
+
+export function isValueBet(edge, threshold = VALUE_EDGE_THRESHOLD) {
+  return Number(edge) >= Number(threshold)
 }

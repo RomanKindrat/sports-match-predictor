@@ -12,7 +12,9 @@ from sqlalchemy.orm import aliased
 
 from app.core.db import get_db
 from app.models import Match, Prediction, Team, User
-from app.services.prediction_facade import get_prediction_facade
+from app.services.api_football import AllSportsLeagueUnavailable
+from app.services.prediction_service import get_prediction_service
+from app.services.model_predictor import get_predictor
 from app.services.storage_service import sync_history_match_results
 from app.services.auth_service import (
     change_user_password,
@@ -113,6 +115,17 @@ def index() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/model/settings")
+def model_settings() -> dict:
+    try:
+        predictor = get_predictor()
+        # Predictor is load-only and reads best_edge from artifacts metadata.
+        selected_edge_threshold = float(getattr(predictor, "best_edge", 0.15))
+        return {"selected_edge_threshold": round(selected_edge_threshold, 4)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load model settings: {exc}") from exc
 
 
 @app.post("/api/auth/register")
@@ -334,14 +347,16 @@ def matches_upcoming(
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        facade = get_prediction_facade()
-        response = facade.get_upcoming_matches(league=league, season=season, limit=limit, db=db)
+        prediction_service = get_prediction_service()
+        response = prediction_service.get_upcoming_matches(league=league, season=season, limit=limit, db=db)
         return {
             "league": response.league,
             "season": response.season,
             "matches": response.matches,
             "note": response.note,
         }
+    except AllSportsLeagueUnavailable as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch upcoming matches: {exc}") from exc
 
@@ -364,9 +379,9 @@ def predict_match(
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        facade = get_prediction_facade()
+        prediction_service = get_prediction_service()
         user = _get_optional_current_user(credentials=credentials, db=db)
-        return facade.predict_match(
+        return prediction_service.predict_match(
             home_team=home_team,
             away_team=away_team,
             season=season,
@@ -393,7 +408,7 @@ def standings(
     team: int | None = Query(None, description="Optional team id"),
 ) -> dict:
     try:
-        facade = get_prediction_facade()
-        return facade.standings(league=league, season=season, team=team)
+        prediction_service = get_prediction_service()
+        return prediction_service.standings(league=league, season=season, team=team)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch standings: {exc}") from exc

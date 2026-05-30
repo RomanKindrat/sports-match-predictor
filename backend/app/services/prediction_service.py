@@ -18,7 +18,7 @@ class UpcomingMatchesResponse:
     note: str | None
 
 
-class PredictionFacade:
+class PredictionService:
     def get_upcoming_matches(
         self,
         league: int = 152,
@@ -79,7 +79,13 @@ class PredictionFacade:
         db: Session | None = None,
         user_id: int | None = None,
     ) -> dict:
-        result = predict_match_from_notebook_model(home_team=home_team, away_team=away_team)
+        result = predict_match_from_notebook_model(
+            home_team=home_team,
+            away_team=away_team,
+            odds_home=odds_home,
+            odds_draw=odds_draw,
+            odds_away=odds_away,
+        )
         prediction_id: int | None = None
         if db is not None:
             season_value = str(season if season is not None else current_epl_season())
@@ -154,6 +160,7 @@ class PredictionFacade:
             "away_team": result.away_team,
             "predicted_result": result.predicted_label,
             "confidence": round(result.confidence, 4),
+            "selected_edge_threshold": round(float(result.selected_edge_threshold), 4),
             "probabilities": {k: round(v, 4) for k, v in result.probabilities.items()},
             "used_fallback_for": result.used_fallback_for,
             "prediction_id": prediction_id,
@@ -164,5 +171,5 @@ class PredictionFacade:
 
 
 @lru_cache(maxsize=1)
-def get_prediction_facade() -> PredictionFacade:
-    return PredictionFacade()
+def get_prediction_service() -> PredictionService:
+    return PredictionService()

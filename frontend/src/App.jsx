@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   changePassword,
   fetchHistory,
+  fetchModelSettings,
   fetchMe,
   fetchPrediction,
   fetchUpcomingMatches,
@@ -41,6 +42,8 @@ export default function App() {
   const [note, setNote] = useState('')
   const [predictions, setPredictions] = useState({})
   const [predictLoading, setPredictLoading] = useState({})
+  const [activePredictId, setActivePredictId] = useState('')
+  const [modelEdgeThreshold, setModelEdgeThreshold] = useState(null)
 
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState('')
@@ -60,7 +63,7 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [showLoginPassword, setShowLoginPassword] = useState(false)
-  const lang = 'en'
+  const lang = 'uk'
   const t = useMemo(() => createT(lang), [lang])
 
   const passwordStrength = useMemo(() => strengthLabel(registerPassword), [registerPassword])
@@ -146,6 +149,19 @@ export default function App() {
     if (pathname === '/' && matches.length === 0) loadMatches()
   }, [pathname, matches.length])
 
+  useEffect(() => {
+    fetchModelSettings()
+      .then((data) => {
+        const threshold = Number(data?.selected_edge_threshold)
+        if (Number.isFinite(threshold) && threshold >= 0) {
+          setModelEdgeThreshold(threshold)
+        }
+      })
+      .catch(() => {
+        // keep frontend fallback when settings endpoint is unavailable
+      })
+  }, [])
+
   function clearAuthAlerts() {
     setAuthError('')
     setAuthSuccess('')
@@ -170,6 +186,8 @@ export default function App() {
 
   async function onPredict(match) {
     const id = match.fixture_id || `${match.home_team}-${match.away_team}-${match.kickoff}`
+    if (activePredictId && activePredictId !== id) return
+    setActivePredictId(id)
     setPredictLoading((prev) => ({ ...prev, [id]: true }))
     try {
       const data = await fetchPrediction({
@@ -226,6 +244,7 @@ export default function App() {
       setPredictions((prev) => ({ ...prev, [id]: { error: e.message } }))
     } finally {
       setPredictLoading((prev) => ({ ...prev, [id]: false }))
+      setActivePredictId('')
     }
   }
 
@@ -322,7 +341,7 @@ export default function App() {
   }
 
   async function handleSaveName(nextName) {
-    if (!token) throw new Error('You need to sign in')
+    if (!token) throw new Error(t('need_sign_in'))
     setProfileSaving(true)
     try {
       const updated = await updateProfileName(token, { name: nextName })
@@ -333,7 +352,7 @@ export default function App() {
   }
 
   async function handleChangePassword(payload) {
-    if (!token) throw new Error('You need to sign in')
+    if (!token) throw new Error(t('need_sign_in'))
     setPasswordChanging(true)
     try {
       await changePassword(token, payload)
@@ -357,6 +376,8 @@ export default function App() {
           note,
           predictions,
           predictLoading,
+          activePredictId,
+          modelEdgeThreshold,
           onGoHistory: () => (me ? navigate('/history', setPathname) : navigate('/login', setPathname)),
           onGoAnalytics: () => (me ? navigate('/analytics', setPathname) : navigate('/login', setPathname)),
           onGoProfile: () => (me ? navigate('/profile', setPathname) : navigate('/login', setPathname)),
